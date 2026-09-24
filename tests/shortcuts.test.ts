@@ -196,6 +196,22 @@ describe("shortcut files", () => {
         const validation = spawnSync("desktop-file-validate", [shortcut.files[0]], { encoding: "utf8" });
         if (!validation.error) expect(validation.status, validation.stdout + validation.stderr).toBe(0);
     });
+
+    it("links the desktop entry to FreeRDP's window class through StartupWMClass", () => {
+        const directory = temporaryDirectory();
+        const shortcut = saveShortcut(
+            {
+                app: { ...app, Name: `Editor, v2.'final"` },
+                name: "Editor",
+                extraArgs: "",
+                destination: "applications",
+            },
+            directory,
+            join(directory, "applications"),
+            null,
+        );
+        expect(readFileSync(shortcut.files[0], "utf8")).toContain("StartupWMClass=winboat-Editor v2final");
+    });
 });
 
 describe("FreeRDP process lifetime", () => {
