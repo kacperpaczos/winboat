@@ -144,7 +144,12 @@
                     </x-menu>
                 </x-select>
                 <x-select
-                    @change="(e: any) => (filterBy = e.detail.newValue)"
+                    @change="
+                        (e: any) => {
+                            filterBy = e.detail.newValue;
+                            WinboatConfig.getInstance().config.appsFilterMode = e.detail.newValue;
+                        }
+                    "
                     :disabled="!winboat.isOnline.value"
                     class="flex flex-row-reverse gap-1 items-center justify-center"
                 >
@@ -338,6 +343,7 @@ const computedApps = computed(() => {
 
 onMounted(async () => {
     sortBy.value = WinboatConfig.getInstance().config.appsSortOrder;
+    filterBy.value = WinboatConfig.getInstance().config.appsFilterMode || "apps";
 
     await refreshApps();
 
