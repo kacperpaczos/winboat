@@ -246,6 +246,10 @@ $addedPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringCo
 # Tracks display names (lowercase) already added, so x86/x64 builds of the same
 # tool (System32 vs SysWOW64, identical FileDescription) don't show up twice.
 $addedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+# Tracks exe/msc basenames (lowercase) already added for OS binaries. The same
+# tool under C:\Windows can expose localized FileDescriptions (e.g. "Administrator
+# ODBC" vs "ODBC Administrator" for odbcad32.exe), so name dedup does not catch it.
+$addedBasenames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
 # Helper function to validate and add an app to the list if it's unique
 function Add-AppToListIfValid {
@@ -329,6 +333,14 @@ function Add-AppToListIfValid {
         }
     }
 
+    # 4c. Localized duplicate: same OS binary basename under the Windows directory
+    # is the same entry regardless of localized display name. Restricted to
+    # C:\Windows so third-party apps with same-named exes are never merged.
+    $baseNameKey = [System.IO.Path]::GetFileName($fullPath).ToLowerInvariant()
+    if ($fullPath -like "*\Windows\*" -and $addedBasenames.Contains($baseNameKey)) {
+        return
+    }
+
     # 5. Get Icon
     $icon = Get-ApplicationIcon -targetPath $fullPath
 
@@ -341,9 +353,10 @@ function Add-AppToListIfValid {
         Source = $Source
     })
 
-    # 7. Mark Path and Name as Added
+    # 7. Mark Path, Name and Basename as Added
     $addedPaths.Add($normalizedPathKey) | Out-Null
     $addedNames.Add($nameKey) | Out-Null
+    $addedBasenames.Add($baseNameKey) | Out-Null
 }
 
 
