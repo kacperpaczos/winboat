@@ -143,7 +143,9 @@ export function saveShortcut(
         `Name=${desktopValue(shortcut.name)}`,
         `Exec=${desktopExec(join(directory, "launch"))} ${id}`,
         `Icon=${desktopValue(icon)}`,
-        `StartupWMClass=winboat-${cleanAppName(shortcut.app.Name)}`,
+        // Escaped like every other value: desktop entry unescaping hands back the exact
+        // bytes FreeRDP stores in the window's WM_CLASS, so window matching still works.
+        `StartupWMClass=${desktopValue(`winboat-${cleanAppName(shortcut.app.Name)}`)}`,
         "Terminal=false",
         "Categories=Utility;",
         `X-WinBoat-Shortcut=${id}`,
