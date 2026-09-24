@@ -243,6 +243,9 @@ function Get-UWPBase64Logo {
 $apps = [System.Collections.Generic.List[PSCustomObject]]::new()
 # Store normalized (lowercase) full paths for case-insensitive duplicate checking
 $addedPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+# Tracks display names (lowercase) already added, so x86/x64 builds of the same
+# tool (System32 vs SysWOW64, identical FileDescription) don't show up twice.
+$addedNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
 # Helper function to validate and add an app to the list if it's unique
 function Add-AppToListIfValid {
@@ -311,6 +314,21 @@ function Add-AppToListIfValid {
         return # Skip if this exact executable path has already been added
     }
 
+    # 4b. Deduplicate by display name (case-insensitive). Windows ships x86/x64
+    # pairs of some tools (System32 vs SysWOW64) with identical FileDescription,
+    # which path-based dedup does not catch. Prefer the 64-bit (non-SysWOW64) build.
+    $nameKey = $Name.Trim().ToLowerInvariant()
+    if ($addedNames.Contains($nameKey)) {
+        $existing = $apps | Where-Object { $_.Name -and $_.Name.Trim().ToLowerInvariant() -eq $nameKey } | Select-Object -First 1
+        if ($existing -and $existing.Path -like "*\SysWOW64\*" -and $fullPath -notlike "*\SysWOW64\*") {
+            # Replace the 32-bit entry with this 64-bit one
+            $apps.Remove($existing) | Out-Null
+            $addedPaths.Remove(([string]$existing.Path).ToLowerInvariant()) | Out-Null
+        } else {
+            return # Same-name entry already listed; first one wins
+        }
+    }
+
     # 5. Get Icon
     $icon = Get-ApplicationIcon -targetPath $fullPath
 
@@ -323,8 +341,9 @@ function Add-AppToListIfValid {
         Source = $Source
     })
 
-    # 7. Mark Path as Added
+    # 7. Mark Path and Name as Added
     $addedPaths.Add($normalizedPathKey) | Out-Null
+    $addedNames.Add($nameKey) | Out-Null
 }
 
 
