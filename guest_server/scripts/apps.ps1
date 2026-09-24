@@ -325,9 +325,11 @@ function Add-AppToListIfValid {
     if ($addedNames.Contains($nameKey)) {
         $existing = $apps | Where-Object { $_.Name -and $_.Name.Trim().ToLowerInvariant() -eq $nameKey } | Select-Object -First 1
         if ($existing -and $existing.Path -like "*\SysWOW64\*" -and $fullPath -notlike "*\SysWOW64\*") {
-            # Replace the 32-bit entry with this 64-bit one
+            # Replace the 32-bit entry with this 64-bit one; drop its path/basename
+            # marks so the common add path below re-marks them cleanly
             $apps.Remove($existing) | Out-Null
             $addedPaths.Remove(([string]$existing.Path).ToLowerInvariant()) | Out-Null
+            $addedBasenames.Remove(([System.IO.Path]::GetFileName([string]$existing.Path)).ToLowerInvariant()) | Out-Null
         } else {
             return # Same-name entry already listed; first one wins
         }
