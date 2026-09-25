@@ -418,18 +418,23 @@
                 </h1>
             </x-card>
             <div></div>
+            <!-- After the 3rd confirmation the flow takes over: observable steps, live log,
+                 retry on error. The app only exits on completion, never on error. -->
+            <RemovalProgress
+                v-if="removalManager !== null"
+                :manager="removalManager"
+                @close="dismissRemoval()"
+            />
             <x-button
+                v-else
                 class="!bg-red-800/20 px-4 py-1 !border-red-500/10 generic-hover flex flex-row items-center gap-2 !text-red-300"
                 @click="resetWinboat()"
-                :disabled="isResettingWinboat"
             >
-                <Icon v-if="resetQuestionCounter < 3" icon="mdi:bomb" class="size-8"></Icon>
-                <x-throbber v-else class="size-8"></x-throbber>
+                <Icon icon="mdi:bomb" class="size-8"></Icon>
 
                 <span v-if="resetQuestionCounter === 0">Reset Winboat & Remove VM</span>
                 <span v-else-if="resetQuestionCounter === 1">Are you sure? This action cannot be undone.</span>
                 <span v-else-if="resetQuestionCounter === 2">One final check, are you ABSOLUTELY sure?</span>
-                <span v-else-if="resetQuestionCounter === 3">Resetting Winboat...</span>
             </x-button>
         </div>
     </div>
@@ -437,13 +442,15 @@
 
 <script setup lang="ts">
 import ConfigCard from "../components/ConfigCard.vue";
-import { computed, onMounted, ref, watch, reactive } from "vue";
+import RemovalProgress from "../components/RemovalProgress.vue";
+import { computed, onMounted, ref, shallowRef, watch, reactive } from "vue";
 import { Winboat } from "../lib/winboat";
 import { ContainerRuntimes, ContainerStatus } from "../lib/containers/common";
 import type { ComposeConfig } from "../../types";
 import { getSpecs } from "../lib/specs";
 import { Icon } from "@iconify/vue";
 import { MultiMonitorMode, RdpArg, WinboatConfig } from "../lib/config";
+import type { RemovalManager } from "../lib/removal";
 import { USBManager, type PTSerializableDeviceInfo } from "../lib/usbmanager";
 import { type Device } from "usb";
 import {
@@ -477,7 +484,8 @@ const origAutoStartContainer = ref(false);
 const autoStartContainer = ref(false);
 const isApplyingChanges = ref(false);
 const resetQuestionCounter = ref(0);
-const isResettingWinboat = ref(false);
+/** Non-null while the removal flow is running; replaces the reset button with the progress view */
+const removalManager = shallowRef<RemovalManager | null>(null);
 const isUpdatingUSBPrerequisites = ref(false);
 
 // For USB Devices
@@ -682,14 +690,37 @@ const saveButtonDisabled = computed(() => {
     return shouldBeDisabled;
 });
 
-async function resetWinboat() {
+function resetWinboat() {
     if (++resetQuestionCounter.value < 3) {
         return;
     }
 
-    isResettingWinboat.value = true;
-    await winboat.resetWinboat();
-    app.exit();
+    startRemoval();
+}
+
+/**
+ * Kicks off the removal flow. The manager drives the RemovalProgress view;
+ * once the flow completes we give the user a moment to read the summary,
+ * then exit as before. On error the app stays open so the user can retry,
+ * inspect the logs, or dismiss the view.
+ */
+function startRemoval() {
+    const manager = winboat.createRemovalManager();
+
+    manager.emitter.on("completed", () => {
+        setTimeout(() => app.exit(), 3000);
+    });
+
+    removalManager.value = manager;
+}
+
+/**
+ * Dismisses the removal progress view and puts the reset button back
+ * to its initial state
+ */
+function dismissRemoval() {
+    removalManager.value = null;
+    resetQuestionCounter.value = 0;
 }
 
 // Reactivity utterly fails here, so we use this function to
