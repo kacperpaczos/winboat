@@ -15,6 +15,7 @@ import { ContainerRuntimes, createContainer } from "./containers/common";
 import { ContainerManager, ContainerStatus, isStaleContainerError } from "./containers/container";
 import type { LaunchState } from "../../types";
 import { GuestServiceError } from "./shortcut-startup";
+import { cleanAppName } from "./shortcut-files";
 import { QMPManager } from "./qmp";
 
 const nodeFetch: typeof import("node-fetch").default = require("node-fetch");
@@ -770,7 +771,7 @@ export class Winboat {
             return;
         }
 
-        const cleanAppName = app.Name.replaceAll(/[,.'"]/g, "");
+        const appName = cleanAppName(app.Name);
         const { username, password } = this.getCredentials();
 
         logger.info(`Launching app: ${app.Name} at path ${app.Path}`);
@@ -805,8 +806,8 @@ export class Winboat {
                 "-wallpaper",
                 this.#wbConfig?.config.multiMonitor === MultiMonitorMode.MultiMon ? "/multimon" : "",
                 `/scale-desktop:${this.#wbConfig?.config.scaleDesktop ?? 100}`,
-                `/wm-class:winboat-${cleanAppName}`,
-                `/app:program:${app.Path},name:${cleanAppName}${app.Args ? `,cmd:"${app.Args}"` : ""}`,
+                `/wm-class:winboat-${appName}`,
+                `/app:program:${app.Path},name:${appName}${app.Args ? `,cmd:"${app.Args}"` : ""}`,
             ]);
         }
 
