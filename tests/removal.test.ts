@@ -259,6 +259,55 @@ describe("RemovalManager", () => {
         await h.cleanup();
     });
 
+    it("re-entrancy: a second run() rejects while one is in flight, and running resets when it finishes", async () => {
+        let resolveStop!: () => void;
+        const stopDeferred = new Promise<void>(resolve => {
+            resolveStop = resolve;
+        });
+
+        const h = await createHarness({
+            createStorageFolder: true,
+            stopContainer: () => stopDeferred,
+        });
+
+        let firstRunSettled = false;
+        const firstRun = h.manager.run().then(() => {
+            firstRunSettled = true;
+        });
+
+        // Wait until the first run is parked inside the never-resolving stopContainer
+        for (let i = 0; i < 200 && h.manager.state !== RemovalStates.STOPPING_CONTAINER; i++) {
+            await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        expect(h.manager.state).toBe(RemovalStates.STOPPING_CONTAINER);
+        expect(h.manager.running).toBe(true);
+
+        // A concurrent run is a programmer error and must throw the contract exception
+        await expect(h.manager.run()).rejects.toThrow("already in progress");
+        expect(h.calls.remove).toBe(0);
+        expect(h.events.steps.map(s => s.state)).toEqual([
+            RemovalStates.PRECHECK,
+            RemovalStates.STOPPING_CONTAINER,
+        ]);
+
+        resolveStop();
+        await firstRun;
+        expect(firstRunSettled).toBe(true);
+        expect(h.manager.running).toBe(false);
+        expect(h.manager.state).toBe(RemovalStates.COMPLETED);
+        expect(h.events.completed).toHaveLength(1);
+
+        // A fresh run is no longer rejected: it starts executing from PRECHECK again
+        // (and fails there, because the first run already removed the compose file
+        // together with the WinBoat dir). No "already in progress" rejection.
+        await h.manager.run();
+        expect(h.manager.running).toBe(false);
+        expect(h.events.steps.at(-1)?.state).toBe(RemovalStates.PRECHECK);
+        expect(h.events.errors.at(-1)?.state).toBe(RemovalStates.PRECHECK);
+
+        await h.cleanup();
+    });
+
     it("legacy named volume with DOCKER runtime: exec receives 'docker volume rm winboat_data'", async () => {
         const h = await createHarness({
             storageVolume: "data:/storage",

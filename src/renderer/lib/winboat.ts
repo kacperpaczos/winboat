@@ -250,6 +250,8 @@ export class Winboat {
     appMgr: AppManager | null = null;
     qmpMgr: QMPManager | null = null;
     containerMgr: ContainerManager | null = null;
+    /** The most recent removal manager; while it is running, `createRemovalManager` hands it back instead of a second one */
+    #activeRemovalManager: RemovalManager | null = null;
 
     static getInstance() {
         Winboat.instance ??= new Winboat();
@@ -652,19 +654,38 @@ export class Winboat {
     }
 
     /**
+     * The most recent {@link RemovalManager}, if one was ever created. Reattach to it
+     * (e.g. on view remount) to observe a run that is still in flight.
+     */
+    get activeRemovalManager(): RemovalManager | null {
+        return this.#activeRemovalManager;
+    }
+
+    /**
      * Creates a {@link RemovalManager} wired to this singleton's container
      * manager, configured runtime and data directory. The manager runs the
      * "Reset Winboat & Remove VM" flow as 5 observable steps and reports
      * progress, live log lines, errors and a final summary through its emitter.
+     *
+     * While a removal is still running, the existing manager is returned so callers
+     * reattach to the in-flight flow instead of starting a second one.
      */
     createRemovalManager(): RemovalManager {
-        return new RemovalManager({
+        if (this.#activeRemovalManager?.running) {
+            logger.info("[createRemovalManager] Reattaching to the in-flight removal manager");
+            return this.#activeRemovalManager;
+        }
+
+        const manager = new RemovalManager({
             stopContainer: () => this.stopContainer(),
             removeContainer: () => this.containerMgr!.remove(),
             composeFilePath: this.containerMgr!.composeFilePath,
             runtime: this.#wbConfig!.config.containerRuntime,
             winboatDir: WINBOAT_DIR,
         });
+        this.#activeRemovalManager = manager;
+
+        return manager;
     }
 
     /**

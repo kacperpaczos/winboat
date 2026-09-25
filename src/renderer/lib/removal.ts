@@ -115,6 +115,8 @@ export class RemovalManager {
     readonly #exec: (cmd: string) => Promise<{ stdout: string; stderr: string }>;
     /** Accumulates across runs so retries still report what earlier attempts removed */
     readonly #summary: RemovalSummary = { removed: [], warnings: [] };
+    /** True while {@link RemovalManager.run} is in flight; guards against concurrent runs */
+    #running = false;
 
     constructor(deps: RemovalDeps) {
         this.deps = deps;
@@ -123,12 +125,36 @@ export class RemovalManager {
         this.#exec = deps.exec ?? execAsync;
     }
 
+    /** True while a run is in flight. Retries (`run({ fromStep })`) count as part of the same run. */
+    get running(): boolean {
+        return this.#running;
+    }
+
     /**
      * Runs the removal flow, starting at `opts.fromStep` if given (retry semantics),
      * otherwise from the beginning. Step failures are reported through the `error`
      * event and stop the flow; this method never throws for them.
+     *
+     * The only exceptions are programmer errors: calling this while another run is
+     * still in flight (check {@link RemovalManager.running} first), or passing an
+     * invalid `opts.fromStep`. A run keeps executing headless if the UI navigates
+     * away mid-flight; reattach to the same manager instead of starting a second one.
      */
     async run(opts?: { fromStep?: RemovalStates }): Promise<void> {
+        if (this.#running) {
+            throw new Error("A removal run is already in progress");
+        }
+
+        this.#running = true;
+
+        try {
+            await this.#runSteps(opts);
+        } finally {
+            this.#running = false;
+        }
+    }
+
+    async #runSteps(opts?: { fromStep?: RemovalStates }): Promise<void> {
         let startIndex = 0;
 
         if (opts?.fromStep !== undefined) {

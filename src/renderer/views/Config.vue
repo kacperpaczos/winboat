@@ -111,7 +111,7 @@
                                 </h1>
 
                                 <x-button
-                                    :disabled="isUpdatingUSBPrerequisites"
+                                    :disabled="isUpdatingUSBPrerequisites || removalManager !== null"
                                     class="mt-1 !bg-gradient-to-tl from-yellow-200/20 to-transparent ml-auto hover:from-yellow-300/30 transition !border-0"
                                     @click="addRequiredComposeFieldsUSB"
                                 >
@@ -201,6 +201,7 @@
                                         </p>
                                     </div>
                                     <x-button
+                                        :disabled="removalManager !== null"
                                         @click="removeDevice(device)"
                                         class="mt-1 !bg-gradient-to-tl from-red-500/20 to-transparent hover:from-red-500/30 transition !border-0"
                                     >
@@ -210,6 +211,7 @@
                             </TransitionGroup>
                             <x-button
                                 v-if="availableDevices.length > 0"
+                                :disabled="removalManager !== null"
                                 class="!bg-gradient-to-tl from-blue-400/20 shadow-md shadow-blue-950/20 to-transparent hover:from-blue-400/30 transition"
                                 :class="{ 'mt-4': usbManager.ptDevices.value.length }"
                                 @click="refreshAvailableDevices()"
@@ -220,6 +222,7 @@
                                     <x-menuitem
                                         v-for="(device, k) of availableDevices as Device[]"
                                         :key="device.portNumbers.join(',')"
+                                        :disabled="removalManager !== null"
                                         @click="addDevice(device)"
                                     >
                                         <x-label>{{ usbManager.stringifyDevice(device) }}</x-label>
@@ -500,6 +503,8 @@ const usbManager = USBManager.getInstance();
 const USB_BUS_PATH = "/dev/bus/usb:/dev/bus/usb";
 
 onMounted(async () => {
+    // Reattach to an in-flight removal so navigating away and back does not orphan it
+    removalManager.value = winboat.activeRemovalManager;
     await assignValues();
 });
 
@@ -685,7 +690,10 @@ const saveButtonDisabled = computed(() => {
         sharedFolderPath.value !== origSharedFolderPath.value ||
         autoStartContainer.value !== origAutoStartContainer.value;
 
-    const shouldBeDisabled = errors.value?.length || !hasResourceChanges || isApplyingChanges.value;
+    // While the removal flow is running it reads and deletes the very compose file
+    // `replaceCompose` rewrites, so saving must wait until the flow has finished
+    const shouldBeDisabled =
+        errors.value?.length || !hasResourceChanges || isApplyingChanges.value || removalManager.value !== null;
 
     return shouldBeDisabled;
 });

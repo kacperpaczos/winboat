@@ -174,6 +174,10 @@ function unsubscribe() {
 }
 
 async function runRemoval(fromStep?: RemovalStates) {
+    // The view may mount while the flow is already executing headless (navigating
+    // away and back reattaches the same manager); just observe its events then.
+    if (props.manager.running) return;
+
     isRunning.value = true;
     try {
         await props.manager.run({ fromStep });
