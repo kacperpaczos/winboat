@@ -537,6 +537,7 @@ import {
     USB_VID_BLACKLIST,
     RESTART_UNLESS_STOPPED,
     RESTART_NO,
+    AUTOSTART_RESTART_POLICIES,
     GUEST_QMP_PORT,
     MIN_VM_RAM_GB,
     QMP_ARGUMENT,
@@ -660,7 +661,10 @@ async function assignValues() {
     origShareFolder.value = shareFolder.value;
     origSharedFolderPath.value = sharedFolderPath.value;
 
-    autoStartContainer.value = compose.value.services.windows.restart === RESTART_UNLESS_STOPPED;
+    // Any policy that makes the container come back on its own counts as auto start,
+    // not just the one we currently write out
+    const restartPolicy = compose.value.services.windows.restart;
+    autoStartContainer.value = AUTOSTART_RESTART_POLICIES.includes(restartPolicy);
     origAutoStartContainer.value = autoStartContainer.value;
 
     const specs = await getSpecs();
