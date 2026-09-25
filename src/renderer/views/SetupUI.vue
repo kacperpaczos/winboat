@@ -203,7 +203,25 @@
                                 </li>
 
                                 <li v-if="dockerInstallMissing && distroFamily" class="flex flex-col items-start gap-2 pl-1">
-                                    <x-button v-if="!showDockerInstallPlan" class="px-4 text-sm" @click="showDockerInstallPlan = true">
+                                    <div
+                                        v-if="dockerInstallFinished"
+                                        class="flex flex-col gap-1 bg-neutral-800 rounded-lg p-3 w-full"
+                                    >
+                                        <span class="text-sm text-green-400 flex items-center gap-1">
+                                            <Icon icon="mdi:check-circle" class="size-4"></Icon>
+                                            Docker was installed successfully.
+                                        </span>
+                                        <span class="text-sm text-yellow-300">
+                                            Log out and log back in (or reboot) so the docker group membership takes
+                                            effect, then start WinBoat again and continue the setup. The requirement
+                                            above will clear once you sign in again.
+                                        </span>
+                                    </div>
+                                    <x-button
+                                        v-else-if="!showDockerInstallPlan"
+                                        class="px-4 text-sm"
+                                        @click="showDockerInstallPlan = true"
+                                    >
                                         <Icon icon="mdi:download" class="size-4 mr-1"></Icon>
                                         Install Docker automatically
                                     </x-button>
@@ -1293,6 +1311,7 @@ try {
 
 const showDockerInstallPlan = ref(false);
 const dockerInstallRunning = ref(false);
+const dockerInstallFinished = ref(false);
 
 const dockerInstallMissing = computed(() => {
     if (!containerSpecs.value || !("dockerInstalled" in containerSpecs.value)) return false;
@@ -1308,6 +1327,7 @@ async function runDockerInstall() {
     dockerInstallRunning.value = true;
     try {
         await execFileAsync("pkexec", buildPkexecArgs(dockerInstallPlan.value));
+        dockerInstallFinished.value = true;
         showDockerInstallPlan.value = false;
     } catch (e) {
         console.error("Automatic Docker installation failed:", e);
