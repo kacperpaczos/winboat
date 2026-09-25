@@ -75,6 +75,7 @@ export type WinboatConfigObj = {
     closeAction: "ask" | "tray" | "quit";
     shutdownOnQuit: boolean;
     autoStartShortcuts: boolean;
+    appsFilterMode: string;
 };
 
 const currentVersion = new WinboatVersion(import.meta.env.VITE_APP_VERSION);
@@ -102,6 +103,7 @@ const defaultConfig: WinboatConfigObj = {
     closeAction: "ask",
     shutdownOnQuit: false,
     autoStartShortcuts: false,
+    appsFilterMode: 'apps',
 };
 
 function isRdpArg(value: unknown): value is RdpArg {

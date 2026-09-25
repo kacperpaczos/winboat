@@ -145,13 +145,25 @@
                     </x-menu>
                 </x-select>
                 <x-select
-                    @change="(e: any) => (filterBy = e.detail.newValue)"
+                    @change="
+                        (e: any) => {
+                            filterBy = e.detail.newValue;
+                            WinboatConfig.getInstance().config.appsFilterMode = e.detail.newValue;
+                        }
+                    "
                     :disabled="!winboat.isOnline.value"
                     class="flex flex-row-reverse gap-1 items-center justify-center"
                 >
                     <Icon icon="mdi:filter-outline" style="width: 17; height: 17"></Icon>
                     <x-menu class="">
-                        <x-menuitem value="all" toggled>
+                        <x-menuitem value="apps" :toggled="filterBy === 'apps'">
+                            <x-label>
+                                <span class="qualifier"> Filter: </span>
+                                Apps
+                            </x-label>
+                        </x-menuitem>
+
+                        <x-menuitem value="all" :toggled="filterBy === 'all'">
                             <x-label>
                                 <span class="qualifier"> Filter: </span>
                                 All
@@ -272,6 +284,7 @@ import WBMenuItem from "../components/WBMenuItem.vue";
 import ShortcutDialog from "../components/ShortcutDialog.vue";
 import { desktopFailure } from "../lib/shortcuts";
 import { refreshShortcuts, deleteShortcut as removeShortcut, shortcutFor } from "../lib/shortcut-files";
+import { isAppHiddenByDefault } from "../data/appdenylist";
 import { AppIcons, DEFAULT_ICON } from "../data/appicons";
 import { debounce } from "../utils/debounce";
 import { WinboatConfig } from "../lib/config";
@@ -286,7 +299,7 @@ const shortcutDialog = useTemplateRef("shortcutDialog");
 const apps = ref<WinApp[]>([]);
 const searchInput = ref("");
 const sortBy = ref("");
-const filterBy = ref("all");
+const filterBy = ref("apps");
 const addCustomAppDialog = useTemplateRef("addCustomAppDialog");
 const customAppName = ref("");
 const customAppPath = ref("");
@@ -328,7 +341,9 @@ const computedApps = computed(() => {
     // Make copy, otherwise UI might glitch, creating "ghost" app
     let appsCache = [...apps.value];
 
-    if (filterBy.value !== "all") {
+    if (filterBy.value === "apps") {
+        appsCache = appsCache.filter(app => !isAppHiddenByDefault(app));
+    } else if (filterBy.value !== "all") {
         appsCache = appsCache.filter(app => app.Source === filterBy.value);
     }
 
@@ -349,6 +364,7 @@ onMounted(async () => {
     try { refreshShortcuts(); }
     catch (error) { desktopFailure.value = { kind: "error", name: "Shortcuts", message: "Could not read your shortcuts.", detail: String(error) }; }
     sortBy.value = WinboatConfig.getInstance().config.appsSortOrder;
+    filterBy.value = WinboatConfig.getInstance().config.appsFilterMode || "apps";
 
     await refreshApps();
 
