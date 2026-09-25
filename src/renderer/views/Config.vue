@@ -503,8 +503,11 @@ const usbManager = USBManager.getInstance();
 const USB_BUS_PATH = "/dev/bus/usb:/dev/bus/usb";
 
 onMounted(async () => {
-    // Reattach to an in-flight removal so navigating away and back does not orphan it
-    removalManager.value = winboat.activeRemovalManager;
+    // Reattach to an in-flight removal so navigating away and back does not orphan it.
+    // A settled (errored/completed) manager must NOT reattach: the fresh view would
+    // auto-run it again from the start instead of waiting for an explicit Retry.
+    const activeManager = winboat.activeRemovalManager;
+    removalManager.value = activeManager?.running ? activeManager : null;
     await assignValues();
 });
 

@@ -129,7 +129,9 @@ const emit = defineEmits<{ close: [] }>();
 
 const totalSteps = REMOVAL_STEP_ORDER.length;
 const currentStep = ref<RemovalStates>(props.manager.state);
-const currentStepIndex = ref(0);
+// Initialize from the manager so a mid-run reattach shows the real progress;
+// COMPLETED/REMOVAL_ERROR are not executable steps, so clamp their -1 index to 0
+const currentStepIndex = ref(Math.max(0, REMOVAL_STEP_ORDER.indexOf(props.manager.state)));
 const logLines = ref<string[]>([]);
 const failedStep = ref<RemovalStates | null>(null);
 const errorMessage = ref("");
