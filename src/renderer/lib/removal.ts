@@ -249,15 +249,28 @@ export class RemovalManager {
             );
         }
 
+        let compose: unknown;
+
         try {
             const composeFile = fs.readFileSync(this.deps.composeFilePath, "utf-8");
-            return YAML.parse(composeFile) as ComposeConfig;
+            compose = YAML.parse(composeFile);
         } catch (e) {
             throw new Error(
                 `Could not parse the compose file at '${this.deps.composeFilePath}': ${e}. ` +
                     "Fix or remove the file before retrying.",
             );
         }
+
+        // YAML.parse yields null for a blank or truncated file, which would otherwise
+        // blow up later with a raw TypeError instead of an actionable message
+        if (!compose || typeof compose !== "object") {
+            throw new Error(
+                `The compose file at '${this.deps.composeFilePath}' is empty or malformed. ` +
+                    "WinBoat cannot determine what to remove without it. Fix or remove the file before retrying.",
+            );
+        }
+
+        return compose as ComposeConfig;
     }
 
     #findStorageEntry(compose: ComposeConfig): string | undefined {

@@ -81,6 +81,8 @@ interface HarnessOptions {
     createWinboatMarker?: boolean;
     /** Whether the compose file exists at all (defaults to true) */
     composeFileExists?: boolean;
+    /** Overrides the compose file body, e.g. to simulate an empty or malformed file */
+    composeFileContent?: string;
     stopContainer?: RemovalDeps["stopContainer"];
     removeContainer?: RemovalDeps["removeContainer"];
     exec?: RemovalDeps["exec"];
@@ -96,7 +98,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<TestHarness>
     await fsp.mkdir(winboatDir, { recursive: true });
 
     if (options.composeFileExists ?? true) {
-        await fsp.writeFile(composeFilePath, composeYaml(storageVolume), "utf-8");
+        await fsp.writeFile(composeFilePath, options.composeFileContent ?? composeYaml(storageVolume), "utf-8");
     }
 
     if (options.createStorageFolder) {
@@ -382,6 +384,30 @@ describe("RemovalManager", () => {
         expect(h.calls.stop).toBe(0);
         expect(h.manager.state).toBe(RemovalStates.REMOVAL_ERROR);
         expect(h.events.completed).toHaveLength(0);
+
+        await h.cleanup();
+    });
+
+    it("empty compose file: PRECHECK fails with the actionable message and nothing is removed", async () => {
+        const h = await createHarness({
+            composeFileContent: "   \n", // whitespace only: YAML.parse yields null
+            createStorageFolder: true,
+            createWinboatMarker: true,
+        });
+
+        await h.manager.run();
+
+        expect(h.events.errors).toHaveLength(1);
+        expect(h.events.errors[0].state).toBe(RemovalStates.PRECHECK);
+        expect(h.events.errors[0].error.message).toContain("empty or malformed");
+        expect(h.events.errors[0].error.message).toContain(h.composeFilePath);
+        expect(h.calls.stop).toBe(0);
+        expect(h.manager.state).toBe(RemovalStates.REMOVAL_ERROR);
+        expect(h.events.completed).toHaveLength(0);
+
+        // No storage or WinBoat dir deletion happened
+        expect(fs.existsSync(h.dirs.storageDir)).toBe(true);
+        expect(fs.existsSync(path.join(h.dirs.winboatDir, "config.json"))).toBe(true);
 
         await h.cleanup();
     });
