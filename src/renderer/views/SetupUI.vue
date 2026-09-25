@@ -201,6 +201,30 @@
                                         >How?</a
                                     >
                                 </li>
+
+                                <li v-if="dockerInstallMissing && distroFamily" class="flex flex-col items-start gap-2 pl-1">
+                                    <x-button v-if="!showDockerInstallPlan" class="px-4 text-sm" @click="showDockerInstallPlan = true">
+                                        <Icon icon="mdi:download" class="size-4 mr-1"></Icon>
+                                        Install Docker automatically
+                                    </x-button>
+                                    <div v-else class="flex flex-col gap-2 bg-neutral-800 rounded-lg p-3 w-full">
+                                        <span class="text-sm text-neutral-300">
+                                            WinBoat will run the following commands with elevated privileges:
+                                        </span>
+                                        <pre class="text-xs text-neutral-400 font-mono whitespace-pre-wrap">{{ dockerInstallPlan.join("\n") }}</pre>
+                                        <div class="flex gap-2">
+                                            <x-button toggled class="px-4 text-sm" :disabled="dockerInstallRunning" @click="runDockerInstall">
+                                                {{ dockerInstallRunning ? "Installing…" : "Run" }}
+                                            </x-button>
+                                            <x-button class="px-4 text-sm" :disabled="dockerInstallRunning" @click="showDockerInstallPlan = false">
+                                                Cancel
+                                            </x-button>
+                                        </div>
+                                        <span class="text-xs text-neutral-500">
+                                            Log out and back in afterwards so the docker group membership applies.
+                                        </span>
+                                    </div>
+                                </li>
                             </template>
 
                             <!-- Podman Specific Requirements -->
@@ -970,6 +994,13 @@ import {
     type RenderDevice,
 } from "../lib/gpu";
 import { showOpenDialog } from "../lib/electron";
+import { execFileAsync } from "../lib/exec-helper";
+import {
+    buildPkexecArgs,
+    detectDistroFamily,
+    getDockerInstallPlan,
+    type DistroFamily,
+} from "../lib/distro-install";
 
 const path: typeof import("path") = require("node:path");
 const fs: typeof import("fs") = require("node:fs");
@@ -1244,6 +1275,39 @@ watch(renderDevice, () => {
 watch([gpuEnabled, selectedGpu], () => {
     void refreshNvidiaContainerSupport();
 });
+
+const distroFamily = ref<DistroFamily | null>(null);
+try {
+    distroFamily.value = detectDistroFamily(fs.readFileSync("/etc/os-release", "utf8"));
+} catch (e) {
+    console.error("Could not detect the distribution:", e);
+}
+
+const showDockerInstallPlan = ref(false);
+const dockerInstallRunning = ref(false);
+
+const dockerInstallMissing = computed(() => {
+    if (!containerSpecs.value || !("dockerInstalled" in containerSpecs.value)) return false;
+    const dockerSpecs = containerSpecs.value;
+    return !(dockerSpecs.dockerInstalled && dockerSpecs.dockerComposeInstalled && dockerSpecs.dockerIsInUserGroups);
+});
+
+const dockerInstallPlan = computed(() =>
+    distroFamily.value ? getDockerInstallPlan(distroFamily.value, os.userInfo().username) : [],
+);
+
+async function runDockerInstall() {
+    dockerInstallRunning.value = true;
+    try {
+        await execFileAsync("pkexec", buildPkexecArgs(dockerInstallPlan.value));
+        showDockerInstallPlan.value = false;
+    } catch (e) {
+        console.error("Automatic Docker installation failed:", e);
+    } finally {
+        dockerInstallRunning.value = false;
+        void refreshPrerequisites();
+    }
+}
 
 function continueFromPrerequisites() {
     if (!satisfiesPrequisites(specs.value, containerSpecs.value)) return;
