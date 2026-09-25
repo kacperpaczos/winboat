@@ -10,6 +10,7 @@
     },
     "scripts": {
         "dev": "bun scripts/dev-server.ts",
+        "test": "bun test --isolate",
         "prepare:freerdp": "bun scripts/prepare-freerdp.mjs",
         "prepare:electron": "bun scripts/prepare-electron.mjs",
         "build:gs": "bash build-guest-server.sh",
